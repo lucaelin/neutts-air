@@ -34,7 +34,7 @@ RUN uv pip install --system torch==2.8.0 torchaudio --extra-index-url https://do
 RUN uv pip install --system -r requirements.txt
 
 ENV CMAKE_ARGS="-DGGML_VULKAN=on"
-RUN pip install --force-reinstall --ignore-installed --no-cache-dir --no-deps llama-cpp-python==0.3.16
+RUN uv pip install --system llama-cpp-python==0.3.16
 
 RUN uv pip install --system onnxruntime==1.23.1 
 
