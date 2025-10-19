@@ -12,7 +12,12 @@ COPY ./requirements.txt ./
 RUN uv pip install --system -r requirements.txt
 
 ENV BACKBONE=neuphonic/neutts-air
+ENV CODEC=neuphonic/neucodec
 
 COPY . ./
+
+VOLUME "/app/voices"
+VOLUME "/root/.cache/huggingface"
+EXPOSE 8080
 
 CMD ["python", "/app/oai.py"]

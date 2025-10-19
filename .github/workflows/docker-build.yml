@@ -16,14 +16,14 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-torch:
+  build-cuda:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
     steps:
-      - name: Cleanup hosted toolcache to save space for torch images
+      - name: Cleanup hosted toolcache to save space for cuda images
         run: rm -rf /opt/hostedtoolcache
 
       - name: Checkout repository
@@ -55,25 +55,25 @@ jobs:
             type=semver,pattern={{major}}
             type=sha
 
-      - name: Build and push Torch image
+      - name: Build and push cuda image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.torch
+          file: ./Dockerfile.cuda
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  build-llamacpp:
+  build-vulkan:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
     steps:
-      - name: Cleanup hosted toolcache to save space for torch images
+      - name: Cleanup hosted toolcache
         run: rm -rf /opt/hostedtoolcache
 
       - name: Checkout repository
@@ -96,7 +96,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
-            suffix=-llamacpp,onlatest=true
+            suffix=-vulkan,onlatest=true
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -105,11 +105,11 @@ jobs:
             type=semver,pattern={{major}}
             type=sha
 
-      - name: Build and push Llamacpp image
+      - name: Build and push vulkan image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.llamacpp
+          file: ./Dockerfile.vulkan
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

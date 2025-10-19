@@ -29,7 +29,10 @@ VOICES_DIR = Path("voices")  # Directory to store voice files
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize models on startup
-    load_models()
+    load_models(
+        device='cuda' if torch.cuda.is_available() else 'cpu', 
+        backbone_repo=os.getenv("BACKBONE", "neuphonic/neutts-air"), 
+        codec_repo=os.getenv("CODEC", "neuphonic/neucodec"))
     # Load existing voices from disk
     load_voices_from_disk()
     yield
@@ -72,29 +75,27 @@ class ErrorDetail(BaseModel):
 class ErrorResponse(BaseModel):
     error: ErrorDetail
 
-def load_models():
-    """Load TTS models on GPU and keep them in memory"""
+def load_models(device: str = "cuda", backbone_repo: str = "neuphonic/neutts-air", codec_repo: str = "neuphonic/neucodec"):
+    """Load TTS models and keep them in memory"""
     global tts_model
     
-    backbone_repo = os.getenv("BACKBONE", "neuphonic/neutts-air")
-    
     if tts_model is None:
-        logger.info("Loading NeuTTSAir models on GPU...")
+        logger.info("Loading NeuTTSAir models...")
         try:
             tts_model = NeuTTSAir(
                 backbone_repo=backbone_repo,
-                backbone_device="cuda" if torch.cuda.is_available() else "cpu",
-                codec_repo="neuphonic/neucodec",
-                codec_device="cuda" if torch.cuda.is_available() else "cpu"
+                backbone_device=device,
+                codec_repo=codec_repo,
+                codec_device=device
             )
-            logger.info("Models loaded successfully on GPU")
+            logger.info("Models loaded successfully on " + device)
         except Exception as e:
             logger.error(f"Failed to load models: {str(e)}")
             try:
                 tts_model = NeuTTSAir(
                     backbone_repo=backbone_repo,
                     backbone_device="cpu",
-                    codec_repo="neuphonic/neucodec",
+                    codec_repo=codec_repo,
                     codec_device="cpu"
                 )
                 logger.info("Models loaded on CPU as fallback")
@@ -264,7 +265,7 @@ async def upload_voice(
     global tts_model, voice_storage
     
     if tts_model is None:
-        load_models()
+        raise HTTPException(status_code=500, detail="TTS model not loaded")
     
     try:
         # Generate unique voice ID
@@ -334,7 +335,7 @@ async def create_speech(request: SpeechRequest):
     global tts_model, voice_storage
     
     if tts_model is None:
-        load_models()
+        raise HTTPException(status_code=500, detail="TTS model not loaded")
     
     voice_data = None
     for v_id, v_data in voice_storage.items():

@@ -1,7 +1,7 @@
 services:
   neutts:
     build:
-      dockerfile: ./Dockerfile.llamacpp
+      dockerfile: ./Dockerfile.vulkan
       context: .
     volumes:
       - models:/root/.cache/huggingface
