@@ -23,6 +23,9 @@ jobs:
       packages: write
 
     steps:
+      - name: Cleanup hosted toolcache to save space for torch images
+        run: rm -rf /opt/hostedtoolcache
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -70,6 +73,9 @@ jobs:
       packages: write
 
     steps:
+      - name: Cleanup hosted toolcache to save space for torch images
+        run: rm -rf /opt/hostedtoolcache
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
