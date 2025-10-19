@@ -4,7 +4,7 @@ import uuid
 import json
 import tempfile
 from pathlib import Path
-from typing import Dict, Optional, List, Union
+from typing import Optional, List
 import soundfile as sf
 import numpy as np
 import torch
@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 import logging
+
 
 from neuttsair.neutts import NeuTTSAir
 
@@ -75,11 +76,13 @@ def load_models():
     """Load TTS models on GPU and keep them in memory"""
     global tts_model
     
+    backbone_repo = os.getenv("BACKBONE", "neuphonic/neutts-air")
+    
     if tts_model is None:
         logger.info("Loading NeuTTSAir models on GPU...")
         try:
             tts_model = NeuTTSAir(
-                backbone_repo="neuphonic/neutts-air",
+                backbone_repo=backbone_repo,
                 backbone_device="cuda" if torch.cuda.is_available() else "cpu",
                 codec_repo="neuphonic/neucodec",
                 codec_device="cuda" if torch.cuda.is_available() else "cpu"
@@ -89,7 +92,7 @@ def load_models():
             logger.error(f"Failed to load models: {str(e)}")
             try:
                 tts_model = NeuTTSAir(
-                    backbone_repo="neuphonic/neutts-air",
+                    backbone_repo=backbone_repo,
                     backbone_device="cpu",
                     codec_repo="neuphonic/neucodec",
                     codec_device="cpu"
@@ -195,6 +198,35 @@ def preprocess_text(text: str) -> str:
     
     return text
 
+
+def audio_stream_generator(stream, response_format):
+    if response_format not in ["wav", "raw", "pcm"]:
+        raise ValueError("Invalid response_format")
+
+    buffer = io.BytesIO()
+    buffer.name = "audio." + response_format
+    with sf.SoundFile(
+        buffer,
+        mode="w",
+        channels=1,
+        samplerate=24000,
+        subtype="PCM_16",
+        format="WAV" if response_format == "wav" else "RAW",
+    ) as wfile:
+        buffer.seek(0)
+        data = buffer.read()
+        yield data
+        for chunk in stream:
+            # print("chunk:", len(chunk))
+            current_pos = buffer.tell()
+            # print("current_pos:", current_pos)
+            if len(chunk):
+                wfile.write(chunk)
+            buffer.seek(current_pos)
+            data = buffer.read()
+            # print(f"audio_stream_generator: {len(data)}")
+            yield data
+
 @app.get("/")
 async def root():
     """Root endpoint"""
@@ -224,6 +256,10 @@ async def upload_voice(
     """
     Upload a voice sample and transcript for voice cloning
     OpenAI-compatible endpoint for voice management
+    Example: curl -v -X POST "http://localhost:8080/v1/audio/voice" \
+                -F "voice=@samples/dave.wav;type=audio/wav" \
+                -F "name=dave" \
+                -F "transcript=$(printf '%s\n' \"$(cat samples/dave.txt)\")"
     """
     global tts_model, voice_storage
     
@@ -320,28 +356,22 @@ async def create_speech(request: SpeechRequest):
         input_text = preprocess_text(request.input)
         
         logger.info(f"Generating speech for text: {input_text[:50]}...")
-        wav = tts_model.infer(input_text, ref_codes, ref_text)
-        
-        sample_rate = 24000
-        audio_buffer = io.BytesIO()
-        
-        if request.response_format.lower() == "wav":
-            sf.write(audio_buffer, wav, sample_rate, format="WAV")
-            media_type = "audio/wav"
-        else:  
-            sf.write(audio_buffer, wav, sample_rate, format="WAV")
-            media_type = "audio/wav"
-        
-        audio_buffer.seek(0)
-        
+        stream = None
+        # Streaming is only supported for llama backbone, use regular infer for torch backbone
+        if tts_model._is_quantized_model:
+            stream = tts_model.infer_stream(input_text, ref_codes, ref_text)
+        else:
+            stream = [tts_model.infer(input_text, ref_codes, ref_text)]
+
+        stream_enc = audio_stream_generator(stream, request.response_format)
         return StreamingResponse(
-            io.BytesIO(audio_buffer.read()),
-            media_type=media_type,
+            stream_enc,
+            media_type=f"audio/{request.response_format.lower()}",
             headers={
-                "Content-Disposition": f"attachment; filename=speech.{request.response_format}"
+                "Content-Disposition": f"attachment; filename=speech.{request.response_format.lower()}"
             }
         )
-        
+
     except Exception as e:
         logger.error(f"Error generating speech: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate speech: {str(e)}")

@@ -1,0 +1,14 @@
+services:
+  neutts:
+    build:
+      dockerfile: ./Dockerfile.llamacpp
+      context: .
+    volumes:
+      - models:/root/.cache/huggingface
+      - voices:/app/voices
+    ports:
+      - 8080:8080
+
+volumes:
+  models:
+  voices:
