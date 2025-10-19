@@ -30,9 +30,11 @@ VOICES_DIR = Path("voices")  # Directory to store voice files
 async def lifespan(app: FastAPI):
     # Initialize models on startup
     load_models(
-        device='cuda' if torch.cuda.is_available() else 'cpu', 
-        backbone_repo=os.getenv("BACKBONE", "neuphonic/neutts-air"), 
-        codec_repo=os.getenv("CODEC", "neuphonic/neucodec"))
+        backbone_repo=os.getenv("BACKBONE", "neuphonic/neutts-air"),
+        backbone_device='cuda' if torch.cuda.is_available() else 'gpu', # Use 'cuda' for Nvidia or rocm via torch, 'gpu' for Vulkan (CPU fallback) via llama-cpp-python, 'cpu' for CPU only
+        codec_repo=os.getenv("CODEC", "neuphonic/neucodec"),
+        codec_device='cuda' if torch.cuda.is_available() else 'cpu'  # Use 'cuda' for Nvidia or rocm via torch, else 'cpu', 'gpu' not supported for codec
+    )
     # Load existing voices from disk
     load_voices_from_disk()
     yield
@@ -75,7 +77,7 @@ class ErrorDetail(BaseModel):
 class ErrorResponse(BaseModel):
     error: ErrorDetail
 
-def load_models(device: str = "cuda", backbone_repo: str = "neuphonic/neutts-air", codec_repo: str = "neuphonic/neucodec"):
+def load_models(backbone_repo: str = "neuphonic/neutts-air", backbone_device: str = "cuda", codec_repo: str = "neuphonic/neucodec", codec_device: str = "cuda"):
     """Load TTS models and keep them in memory"""
     global tts_model
     
@@ -84,11 +86,11 @@ def load_models(device: str = "cuda", backbone_repo: str = "neuphonic/neutts-air
         try:
             tts_model = NeuTTSAir(
                 backbone_repo=backbone_repo,
-                backbone_device=device,
+                backbone_device=backbone_device,
                 codec_repo=codec_repo,
-                codec_device=device
+                codec_device=codec_device
             )
-            logger.info("Models loaded successfully on " + device)
+            logger.info("Models loaded successfully on " + backbone_device)
         except Exception as e:
             logger.error(f"Failed to load models: {str(e)}")
             try:
@@ -432,9 +434,6 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 if __name__ == "__main__":
     import uvicorn
-    
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    logger.info(f"Using device: {device}")
     
     uvicorn.run(
         "oai:app",
