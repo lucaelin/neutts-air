@@ -18,6 +18,7 @@ COPY . ./
 
 VOLUME "/app/voices"
 VOLUME "/root/.cache/huggingface"
+ENV PORT=8080
 EXPOSE 8080
 
 CMD ["python", "/app/oai.py"]
