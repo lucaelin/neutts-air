@@ -38,8 +38,8 @@ RUN uv pip install --system llama-cpp-python==0.3.16
 
 RUN uv pip install --system onnxruntime==1.23.1 
 
-ENV BACKBONE=neuphonic/neutts-air-q4-gguf
-ENV CODEC=neuphonic/neucodec-onnx-decoder
+ENV BACKBONE=neuphonic/neutts-air-q8-gguf
+ENV CODEC=neuphonic/neucodec
 
 COPY . ./
 

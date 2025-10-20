@@ -4,7 +4,8 @@ import uuid
 import json
 import tempfile
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Generator
+import re
 import soundfile as sf
 import numpy as np
 import torch
@@ -183,23 +184,60 @@ def delete_voice_from_disk(voice_id: str):
         logger.error(f"Failed to delete voice from disk: {str(e)}")
         raise
 
-def preprocess_text(text: str) -> str:
+def preprocess_text(text: str, max_length: int = 400) -> list[str]:
     """
-    Preprocess text to reduce phonemizer warnings and improve TTS quality
+    Preprocess text by chunking it based on a hierarchy of delimiters.
     """
-    # Remove or replace problematic characters
-    text = text.replace('...', '.')
-    text = text.replace('—', '-')
-    text = text.replace('–', '-')
-    
-    # Normalize whitespace
+    # Initial text cleaning
+    text = text.replace('...', '.').replace('—', '-').replace('–', '-')
     text = ' '.join(text.split())
+
+    if not text:
+        return []
+
+    # Define delimiters in order of priority
+    delimiters = ["\n\n", "\n", ". ", "! ", "? ", ", ", "- ", " "]
     
-    # Ensure text ends with proper punctuation
-    if text and text[-1] not in '.!?;:':
-        text += '.'
+    chunks = []
     
-    return text
+    while len(text) > 0:
+        if len(text) <= max_length:
+            chunks.append(text)
+            break
+
+        split_pos = -1
+        
+        # Find the best split position based on delimiter priority
+        for delimiter in delimiters:
+            pos = text.rfind(delimiter, 0, max_length)
+            if pos != -1:
+                split_pos = pos + len(delimiter)
+                break
+        
+        # If no delimiter is found, perform a hard split
+        if split_pos == -1:
+            split_pos = max_length
+            
+        chunk = text[:split_pos].strip()
+        if chunk:
+            chunks.append(chunk)
+        text = text[split_pos:].strip()
+
+    # Ensure the last chunk is added if it exists
+    if text and (not chunks or chunks[-1] != text):
+        chunks.append(text)
+
+    # Post-process to ensure chunks end with punctuation if they are sentences
+    processed_chunks = []
+    for chunk in chunks:
+        if chunk.strip() and chunk.strip()[-1] not in '.!?;:,':
+             # Find last sentence-like structure
+            match = re.search(r'[.!?]\s*$', chunk)
+            if not match:
+                 chunk += '.'
+        processed_chunks.append(chunk)
+
+    return processed_chunks
 
 
 def audio_stream_generator(stream, response_format):
@@ -229,6 +267,11 @@ def audio_stream_generator(stream, response_format):
             data = buffer.read()
             # print(f"audio_stream_generator: {len(data)}")
             yield data
+
+def stream_generator_chain(stream_generators: List[Generator]):
+    """Chain multiple stream generators into one."""
+    for stream_generator in stream_generators:
+        yield from stream_generator
 
 @app.get("/")
 async def root():
@@ -358,13 +401,13 @@ async def create_speech(request: SpeechRequest):
         # Preprocess text to reduce phonemizer warnings
         input_text = preprocess_text(request.input)
         
-        logger.info(f"Generating speech for text: {input_text[:50]}...")
+        logger.info(f"Generating speech for text: {input_text[0][:50]}...")
         stream = None
         # Streaming is only supported for llama backbone, use regular infer for torch backbone
         if tts_model._is_quantized_model:
-            stream = tts_model.infer_stream(input_text, ref_codes, ref_text)
+            stream = stream_generator_chain([tts_model.infer_stream(text, ref_codes, ref_text) for text in input_text])
         else:
-            stream = [tts_model.infer(input_text, ref_codes, ref_text)]
+            stream = [tts_model.infer(text, ref_codes, ref_text) for text in input_text]
 
         stream_enc = audio_stream_generator(stream, request.response_format)
         return StreamingResponse(
