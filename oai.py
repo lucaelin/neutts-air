@@ -278,6 +278,11 @@ async def root():
     """Root endpoint"""
     return {"message": "NeuTTSAir OpenAI-Compatible API", "version": "1.0.0"}
 
+@app.get("/ping")
+async def ping():
+    """Ping endpoint to check server status"""
+    return {"status": "healthy"}
+
 @app.get("/v1/models")
 async def list_models():
     """List available models (OpenAI compatible)"""
