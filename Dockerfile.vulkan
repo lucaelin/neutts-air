@@ -7,6 +7,13 @@ RUN pip install uv
 ENV NVIDIA_DRIVER_CAPABILITIES=all
 ENV NVIDIA_VISIBLE_DEVICES=all
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    bzip2 \
+    ca-certificates \
+    build-essential \
+    portaudio19-dev \ 
+    cmake \
+    git \
     mesa-vulkan-drivers \
     vulkan-tools \
     libvulkan-dev \
