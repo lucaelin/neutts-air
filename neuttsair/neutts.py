@@ -111,11 +111,11 @@ class NeuTTSAir:
             self.backbone = Llama.from_pretrained(
                 repo_id=backbone_repo,
                 filename="*.gguf",
-                verbose=False,
-                n_gpu_layers=-1 if backbone_device == "gpu" else 0,
+                verbose=True,
+                n_gpu_layers=-1 if backbone_device in ["gpu", "cuda"] else 0,
                 n_ctx=self.max_context,
                 mlock=True,
-                flash_attn=True if backbone_device == "gpu" else False,
+                flash_attn=True if backbone_device == "cuda" else False,
             )
             self._is_quantized_model = True
 
