@@ -1,6 +1,17 @@
 FROM pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel
 RUN pip install uv
 
+# Build tools for llama-cpp-python
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    bzip2 \
+    ca-certificates \
+    build-essential \
+    portaudio19-dev \ 
+    cmake \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN apt update && \
     apt install -y espeak-ng && \
     rm -rf /var/lib/apt/lists/*
@@ -10,6 +21,9 @@ RUN mkdir -p /app/voices
 COPY ./requirements.txt ./
 
 RUN uv pip install --system -r requirements.txt
+
+ENV CMAKE_ARGS="-DGGML_CUDA=ON"
+RUN uv pip install --system llama-cpp-python==0.3.16
 
 ENV BACKBONE=neuphonic/neutts-air
 ENV CODEC=neuphonic/neucodec

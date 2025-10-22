@@ -7,13 +7,6 @@ RUN pip install uv
 ENV NVIDIA_DRIVER_CAPABILITIES=all
 ENV NVIDIA_VISIBLE_DEVICES=all
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    bzip2 \
-    ca-certificates \
-    build-essential \
-    portaudio19-dev \ 
-    cmake \
-    git \
     mesa-vulkan-drivers \
     vulkan-tools \
     libvulkan-dev \
@@ -24,6 +17,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libegl1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Build tools for llama-cpp-python
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    bzip2 \
+    ca-certificates \
+    build-essential \
+    portaudio19-dev \ 
+    cmake \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install neutts system dependencies
 RUN apt update && \
     apt install -y espeak-ng && \
     rm -rf /var/lib/apt/lists/*
